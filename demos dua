@@ -1,0 +1,275 @@
+=========================================================================
+Optimalisasi
+Belok lebih halus, tidak terlalu tajam atau patah.
+Menjaga kecepatan tetap seimbang saat koreksi arah.
+Menghindari berhenti mendadak saat kehilangan garis.
+
+Jika Masih Terlalu Kasar
+Naikkan turnSpeed jadi 80.
+Atur baseSpeed jadi 90–120 (tergantung daya motor & sensor).
+=========================================================================
+
+#define m1 3   // PWM kanan belakang
+#define m2 5   // PWM kiri belakang
+#define m3 9   // arah kanan
+#define m4 10  // arah kiri
+
+void setup() {	
+  pinMode(m1, OUTPUT);	
+  pinMode(m2, OUTPUT);	
+  pinMode(m3, OUTPUT);	
+  pinMode(m4, OUTPUT);	
+  pinMode(12, INPUT);  // sensor kiri
+  pinMode(13, INPUT);  // sensor kanan
+}
+
+void loop() {
+  // Pembacaan sensor IR
+  int lsensor = digitalRead(12);	
+  int rsensor = digitalRead(13);
+
+  // Logika robot berdasarkan kondisi sensor
+  if ((lsensor == LOW) && (rsensor == LOW)) {
+    // Garis di tengah - maju
+    motorOut(100, 100, 2);
+  }	
+  else if ((lsensor == HIGH) && (rsensor == LOW)) {
+    // Hanya sensor kiri tidak melihat garis - belok kiri
+    motorOut(100, 0, 2);
+  }
+  else if ((lsensor == LOW) && (rsensor == HIGH)) {
+    // Hanya sensor kanan tidak melihat garis - belok kanan
+    motorOut(0, 100, 2);
+  }
+  else if ((lsensor == HIGH) && (rsensor == HIGH)) {
+    // Tidak ada garis terdeteksi - stop
+    motorOut(0, 0, 2);
+  }
+}
+
+// Fungsi kontrol motor
+void motorOut(unsigned char lpwm, unsigned char rpwm, int arah) {
+  // arah = 1 -> mundur, 2 -> maju
+  if (arah == 1) {
+    // Mundur
+    digitalWrite(m3, HIGH);	
+    digitalWrite(m1, LOW);	
+    analogWrite(m4, 255 - lpwm);	
+    analogWrite(m2, rpwm);	
+  }	
+  else if (arah == 2) {
+    // Maju
+    digitalWrite(m3, LOW);	
+    digitalWrite(m1, HIGH);	
+    analogWrite(m4, lpwm);	
+    analogWrite(m2, 255 - rpwm);	
+  }
+}
+
+=========================================================================
+Versi Optimal (Halus & Responsif)
+=========================================================================
+
+#define m1 3   // PWM kanan belakang
+#define m2 5   // PWM kiri belakang
+#define m3 9   // arah kanan
+#define m4 10  // arah kiri
+
+const int baseSpeed = 100;  // Kecepatan dasar
+const int turnSpeed = 60;   // Kecepatan koreksi belok
+
+void setup() {
+  pinMode(m1, OUTPUT);
+  pinMode(m2, OUTPUT);
+  pinMode(m3, OUTPUT);
+  pinMode(m4, OUTPUT);
+  pinMode(12, INPUT);  // Sensor kiri
+  pinMode(13, INPUT);  // Sensor kanan
+}
+
+void loop() {
+  int lsensor = digitalRead(12);
+  int rsensor = digitalRead(13);
+
+  if ((lsensor == LOW) && (rsensor == LOW)) {
+    // Lurus, keduanya mendeteksi garis
+    motorOut(baseSpeed, baseSpeed, 2);
+  }
+  else if ((lsensor == HIGH) && (rsensor == LOW)) {
+    // Sensor kiri kehilangan garis, belok kiri halus
+    motorOut(turnSpeed, baseSpeed + 20, 2);
+  }
+  else if ((lsensor == LOW) && (rsensor == HIGH)) {
+    // Sensor kanan kehilangan garis, belok kanan halus
+    motorOut(baseSpeed + 20, turnSpeed, 2);
+  }
+  else if ((lsensor == HIGH) && (rsensor == HIGH)) {
+    // Kehilangan garis - tetap maju perlahan (optional: stop atau cari garis)
+    motorOut(50, 50, 2);
+  }
+}
+
+// Fungsi kontrol motor
+void motorOut(unsigned char lpwm, unsigned char rpwm, int arah) {
+  if (arah == 1) {
+    // Mundur
+    digitalWrite(m3, HIGH);
+    digitalWrite(m1, LOW);
+    analogWrite(m4, 255 - lpwm);
+    analogWrite(m2, rpwm);
+  }
+  else if (arah == 2) {
+    // Maju
+    digitalWrite(m3, LOW);
+    digitalWrite(m1, HIGH);
+    analogWrite(m4, lpwm);
+    analogWrite(m2, 255 - rpwm);
+  }
+}
+
+=========================================================================
+PID Sederhana (Proporsional)
+
+P = Proportional → Koreksi gerak berdasarkan selisih sensor kiri dan kanan.
+Kita anggap:
+Sensor KIRI = 0 (LOW) = Deteksi garis
+Sensor KANAN = 1 (HIGH) = Tidak deteksi garis
+Maka perbedaan = lsensor - rsensor
+
+Nilai itu kita pakai untuk menghitung koreksi kecepatan motor kanan dan kiri.
+
+Simulasi Sederhana:
+error = lsensor - rsensor
+correction = error * Kp
+motorKiri = baseSpeed + correction
+motorKanan = baseSpeed - correction
+Di sini Kp adalah konstanta koreksi (tuning bisa diubah).
+
+Tips Tuning:
+Ganti nilai Kp antara 30–80 tergantung seberapa agresif kamu mau belok.
+baseSpeed idealnya antara 80–130 tergantung motor kamu kuat atau tidak.
+=========================================================================
+#define m1 3   // PWM kanan belakang
+#define m2 5   // PWM kiri belakang
+#define m3 9   // arah kanan
+#define m4 10  // arah kiri
+
+const int baseSpeed = 100;  // Kecepatan dasar
+const float Kp = 50.0;      // Faktor proporsional
+
+void setup() {
+  pinMode(m1, OUTPUT);
+  pinMode(m2, OUTPUT);
+  pinMode(m3, OUTPUT);
+  pinMode(m4, OUTPUT);
+  pinMode(12, INPUT);  // Sensor kiri
+  pinMode(13, INPUT);  // Sensor kanan
+}
+
+void loop() {
+  int lsensor = digitalRead(12);  // 0 = garis, 1 = putih
+  int rsensor = digitalRead(13);
+
+  int error = lsensor - rsensor;  // bisa -1, 0, atau 1
+  int correction = Kp * error;
+
+  // Hitung kecepatan motor
+  int speedLeft = constrain(baseSpeed + correction, 0, 255);
+  int speedRight = constrain(baseSpeed - correction, 0, 255);
+
+  // Jika keduanya HIGH (tidak lihat garis), pelan-pelan lurus
+  if (lsensor == HIGH && rsensor == HIGH) {
+    motorOut(60, 60, 2);  // pelan pelan cari garis
+  } else {
+    motorOut(speedLeft, speedRight, 2);
+  }
+}
+
+// Fungsi kontrol motor
+void motorOut(unsigned char lpwm, unsigned char rpwm, int arah) {
+  if (arah == 1) {
+    digitalWrite(m3, HIGH);
+    digitalWrite(m1, LOW);
+    analogWrite(m4, 255 - lpwm);
+    analogWrite(m2, rpwm);
+  } else if (arah == 2) {
+    digitalWrite(m3, LOW);
+    digitalWrite(m1, HIGH);
+    analogWrite(m4, lpwm);
+    analogWrite(m2, 255 - rpwm);
+  }
+}
+
+=========================================================================
+Recovery Otomatis
+
+Uji & Tuning
+Kalau robot muter terlalu cepat: kecilkan recoverySpeed jadi 50.
+Kalau terlalu lambat balik ke jalur: perbesar recoveryDelay jadi 20 ms.
+Bisa juga kamu ubah jadi belok kanan kalau lintasan lebih sering ke kanan.
+=========================================================================
+#define m1 3   // PWM kanan belakang
+#define m2 5   // PWM kiri belakang
+#define m3 9   // arah kanan
+#define m4 10  // arah kiri
+
+const int baseSpeed = 100;  // Kecepatan normal
+const float Kp = 50.0;      // Faktor proporsional
+const int recoverySpeed = 80;  // Kecepatan saat recovery
+const int recoveryDelay = 10;  // Delay antara perputaran (ms)
+
+void setup() {
+  pinMode(m1, OUTPUT);
+  pinMode(m2, OUTPUT);
+  pinMode(m3, OUTPUT);
+  pinMode(m4, OUTPUT);
+  pinMode(12, INPUT);  // Sensor kiri
+  pinMode(13, INPUT);  // Sensor kanan
+}
+
+void loop() {
+  int lsensor = digitalRead(12);  // 0 = garis, 1 = putih
+  int rsensor = digitalRead(13);
+
+  // Jika kehilangan garis (keduanya HIGH)
+  if (lsensor == HIGH && rsensor == HIGH) {
+    // Recovery Mode: muter kiri perlahan
+    while (true) {
+      motorOut(60, recoverySpeed, 2); // belok kiri perlahan
+      delay(recoveryDelay);
+
+      // Baca ulang sensor
+      lsensor = digitalRead(12);
+      rsensor = digitalRead(13);
+
+      // Kalau salah satu sensor sudah menemukan garis, keluar dari recovery
+      if (lsensor == LOW || rsensor == LOW) {
+        break;
+      }
+    }
+  }
+
+  // Setelah recovery atau kondisi normal
+  int error = lsensor - rsensor;
+  int correction = Kp * error;
+
+  int speedLeft = constrain(baseSpeed + correction, 0, 255);
+  int speedRight = constrain(baseSpeed - correction, 0, 255);
+
+  motorOut(speedLeft, speedRight, 2);
+}
+
+// Fungsi kontrol motor
+void motorOut(unsigned char lpwm, unsigned char rpwm, int arah) `{
+  if (arah == 1) {
+    digitalWrite(m3, HIGH);a
+    digitalWrite(m1, LOW);
+    analogWrite(m4, 255 - lpwm);
+    analogWrite(m2, rpwm);
+  } else if (arah == 2) {
+    digitalWrite(m3, LOW);
+    digitalWrite(m1, HIGH);
+    analogWrite(m4, lpwm);
+    analogWrite(m2, 255 - rpwm);
+  }
+}
